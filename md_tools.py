@@ -39,6 +39,44 @@ def is_prime(n):
         return False
     return all(n % i for i in range(3, int(np.sqrt(n)) + 1, 2))
 
+def linear_convolution(x, signal, sigma, sigma_lin=0, sigma_range=3):
+    """
+    Convolutes a signal with a gaussian a width that depends on the x-axis
+    sigma_new = sigma + sigma_lin*x
+    Requires equally spaced data
+    Parameters:
+        signal: data.
+        x: x-axis
+        sigma: width of gaussian
+        sigma_lin: linear parameter. Default behaviour is no linear dependance.
+        sigma_range: cutoff for the Gaussian function. Default is 3 sigma.
+    Returns:
+        x, y_new: x, new y-values
+    """
+    print("... Computing Convolution ...")
+    dx = x[1]-x[0] # assume equally spaced data
+    if sigma_lin == 0:
+        print("\tNormal convolution (no linear term). Length of signal: {}".format(len(signal)))
+        print("\tsigma = {:.3f} meV ({:.3f} meV FWHM)".format(sigma, 2.3548*sigma))
+        gx = np.arange(-sigma_range*sigma, sigma_range*sigma, dx)
+        gaussian = 1/np.sqrt(2.0*np.pi)/sigma*np.exp(-0.5*(gx/sigma)**2)
+        return x, np.convolve(signal, gaussian, mode='same')*dx
+    else:
+        # convolute with a different gaussian at each point
+        # much more expensive, but still fast even with several thousand points
+        sigma_min = sigma + sigma_lin*min(x)
+        sigma_max = sigma + sigma_lin*max(x)
+        print("\tLinear Convolution. Length of signal: {}".format(len(signal)))
+        print("\tsigma_min = {:.3f} meV ({:.3f} meV FWHM)".format(sigma_min, 2.3548*sigma_min))
+        print("\tsigma_max = {:.3f} meV ({:.3f} meV FWHM)".format(sigma_max, 2.3548*sigma_max))
+        y_new = np.zeros(len(x))
+        for i, x_val in enumerate(x):
+            sig = sigma + sigma_lin*x_val
+            gx = np.arange(-sigma_range*sig, sigma_range*sig, dx)
+            gaussian = 1/np.sqrt(2.0*np.pi)/sig*np.exp(-0.5*(gx/sig)**2)
+            y_new[i] = np.convolve(signal, gaussian, mode='same')[i]*dx
+        return x, y_new
+
 class VaspMD:
     def __init__(self, xdatcar, dt=1, frames=None, is_poscar=False):
         print('... Loading XDATCAR ...')
@@ -241,7 +279,7 @@ class VaspMD:
         end = time.time()
         print('\tComputed VACF in {} seconds'.format(end-start))
         
-    def compute_dos(self, sigma=0.3, weight='equal', method=1):
+    def compute_dos(self, sigma=0.3, weight='neutron_sqw', method=1):
         if self.vacf is None:
             self.compute_vacf(weight='mass')
         
@@ -261,7 +299,7 @@ class VaspMD:
             # has to be normalized such that window=1 at t=0 (rather than a Gaussian normalized to area 1)
             window = np.exp(-0.5*(x/sigma_t)**2)
             self.window = window
-            print('\tDOS smoothed by sigma = {:.2f} ps | {:.2f} THz | {:.2f} meV ({:.2f} meV FWHM)'.format(sigma_t*1e-3, sigma_f, sigma, sigma*2.55))
+            print('\tDOS smoothed by sigma = {:.2f} ps | {:.2f} THz | {:.2f} meV ({:.2f} meV FWHM)'.format(sigma_t*1e-3, sigma_f, sigma, sigma*2.3548))
         else:
             # no smoothing
             window = np.ones(2*self.nvel-1)
@@ -293,22 +331,20 @@ class VaspMD:
         self.__compute_axes()
         end = time.time()
         print('\tComputed DOS in {} seconds'.format(end-start))
-            
-    def get_atomic_dos_dict(self, sigma=None):
-        if self.dos is None:
-            self.compute_dos(sigma)
-        
-        pdos_dict = dict()
 
+        # genrate pdos dictionary for easier plotting
+        self.pdos_dict = {}
         for i, s in enumerate(self.symbol):
-            if s in pdos_dict:
-                pdos_dict[s] += self.pdos[:,i]
+            if s in self.pdos_dict:
+                self.pdos_dict[s] += self.pdos[:,i]
             else:
-                pdos_dict[s] = self.pdos[:,i]
+                self.pdos_dict[s] = self.pdos[:,i]
 
-        pdos_dict['omega'] = self.omega
-        pdos_dict['total_dos'] = self.dos
-        return pdos_dict
+        self.pdos_dict['omega'] = self.omega
+        self.pdos_dict['total_dos'] = self.dos
+
+    def get_atomic_dos_dict(self, sigma=None):
+        return self.pdos_dict
     
     def __compute_axes(self):
         """
@@ -330,7 +366,7 @@ class VaspMD:
         print("\tVACF: angstrom^2/fs (multiply by 10000 to get MDANSE units)")
         print("\tDOS: angstrom^2/fs^2 (multiply by 10 to get MDANSE units)")
 
-    def compute_pdf(self, nbins=1000, pdf_range=(0,1.2), weight='neutron'):
+    def compute_pdf(self, nbins=1000, pdf_range=(0,12), weight='neutron_norm'):
         """
         Computes the pair distribution function
         """
@@ -356,19 +392,21 @@ class VaspMD:
         # build dictionary of partial factors,
         # where each key is a partial string and the value is a list:
         # [N_a, N_b, b_a, b_b, c_a, c_b]
-        pf = dict()
+        pf = {}
         partial_label, partial_index = np.unique(pair_partial, return_index=True)
 
-        avg_bcoh = 0
         for p, i in zip(partial_label, partial_index):
             ii = pair_indices[i]
             b_a, b_b = BCOH[self.symbol[ii[0]]], BCOH[self.symbol[ii[1]]]
             N_a, N_b = self.num_atoms[self.symbol[ii[0]]], self.num_atoms[self.symbol[ii[1]]]
             c_a, c_b = N_a/self.nions, N_b/self.nions
             pf[p] = [N_a, N_b, b_a, b_b, c_a, c_b]
-            avg_bcoh += b_a*b_b
 
-        avg_bcoh /= len(partial_label)
+        # compute b_avg_squared for normalizataion
+        b_avg_squared = 0
+        for s in np.unique(self.symbol):
+            b_avg_squared += BCOH[s]*self.num_atoms[s]/self.nions
+        b_avg_squared = b_avg_squared**2
 
         # find all distances for all frames
         # this is the time-consuming part of the code
@@ -383,7 +421,7 @@ class VaspMD:
             distances[t,:] = d
 
         # histogram distances depending on their partials (alpha,beta)
-        g_ab = dict()
+        g_ab = {}
         g_total = np.zeros(nbins)
 
         for partial in partial_label:
@@ -397,10 +435,15 @@ class VaspMD:
             b_a, b_b = pf[partial][2], pf[partial][3]
             c_a, c_b = pf[partial][4], pf[partial][5]
             
-            g_ab[partial] = g_ab[partial]*2*self.volume/(N_a*N_b)/self.nframes/Vs            
+            g_ab[partial] = g_ab[partial]*2*self.volume/(N_a*N_b)/self.nframes/Vs
             
             if weight == 'neutron':
-                g_ab[partial] = g_ab[partial]*c_a*c_b*b_a*b_b/avg_bcoh
+                # Eq (10) in Keen et al. (2000)
+                g_ab[partial] = (g_ab[partial]-1)*c_a*c_b*b_a*b_b
+                g_total += g_ab[partial]
+            elif weight == 'neutron_norm':
+                # Eq (17) in Keen et al. (2000)
+                g_ab[partial] = (g_ab[partial]-1)*c_a*c_b*b_a*b_b/b_avg_squared
                 g_total += g_ab[partial]
             elif weight == 'equal':
                 g_ab[partial] = g_ab[partial]*c_a*c_b
@@ -414,8 +457,6 @@ class VaspMD:
         
         self.ppdf = g_ab
         self.pdf = g_total
-        self.tcf = Vs*self.rho/r*(self.pdf-1) # TCF = 4 pi r rho (pdf - 1)
-        self.rdf = Vs*self.rho*self.pdf # RDF = 4 pi r^2 rho (pdf)
         self.pdf_x = r # PDF x-axis
 
         end = time.time()
@@ -628,7 +669,7 @@ def get_octahedral_tilt_histogram(md, octahedra, sym=None):
 
     return Q1.ravel(), Q2.ravel()
 
-def plot_pdos(vaspmd_object, ax=None, colors=None, total_color='C7', total_alpha=0.5, in_nm2_ps2=False):
+def plot_pdos(vaspmd_object, ax=None, colors=None, total_color='xkcd:grey', total_alpha=0.5, in_nm2_ps2=False):
     dos = vaspmd_object.get_atomic_dos_dict()
 
     if colors is not None:
