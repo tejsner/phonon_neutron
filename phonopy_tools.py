@@ -308,19 +308,3 @@ def get_xy_colormap(sqw, energy, sigma=0.5):
     xx, yy = np.meshgrid(sqw['qx'], sqw['qy'])
     print('... Generated colormap in {:.3f} seconds ...'.format(time.time() - start))
     return xx, yy, I.T
-
-if __name__ == '__main__':
-    import os
-    os.chdir('C:/Users/ttejs/Dropbox/ILL/simulation/phonon/')
-    plt.style.use('seaborn-paper')
-
-    sim = 'lto'
-    lto = PhonopyNeutron(sim + '/phonopy_disp.yaml', sim + '/FORCE_SETS')
-    lto.compute_dos(partial=True, weight='equal', sigma=0.5)
-    lto.plot_dos()
-    #lto.compute_dos(partial=False, weight='equal', sigma=0.5)
-    #plt.plot(lto.dos['en'], lto.dos['total_dos'], 'k-')
-    #lto.compute_dos(partial=False)
-    #plt.plot(lto.dos['en'], lto.dos['total_dos'])
-    plt.show()
-
