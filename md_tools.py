@@ -5,6 +5,7 @@ import pickle
 import time
 from numpy.fft import fft, ifft, fftshift, ifftshift
 from matplotlib.colors import LogNorm
+from phonopy.interface.vasp import read_vasp
 
 # masses from VASP pseudopotentials (since these are the ones used in simulation)
 MASS = {'Cu': 63.546, 'La': 138.900, 'O': 16.000, 'Sr': 87.620}
@@ -78,23 +79,26 @@ def linear_convolution(x, signal, sigma, sigma_lin=0, sigma_range=3):
         return x, y_new
 
 class VaspMD:
-    def __init__(self, xdatcar, dt=1, frames=None, is_poscar=False):
-        print('... Loading XDATCAR ...')
-        self.read_xdatcar(xdatcar, dt=dt)
+    def __init__(self, xdatcar, dt=1, frames=None, poscar_mode=False):
+        if poscar_mode:
+            print('... Loading POSCAR ...')
+            atoms = read_vasp(xdatcar)
+            self.symbol = np.array(atoms.get_chemical_symbols())
+            self.cell = atoms.get_cell()
+            self.position = atoms.get_scaled_positions()[None,:,:]
+        else:
+            print('... Loading XDATCAR ...')
+            self.read_xdatcar(xdatcar, dt=dt)
 
-        if frames is not None:
-            self.position = self.position[frames,:,:]
-        
-        self.nframes = self.position.shape[0]
+            if frames is not None:
+                self.position = self.position[frames,:,:]
+            
+            self.nframes = self.position.shape[0]
 
-        self.velocity = None
-        self.vacf = None
-        self.dos = None
-
-        # we have some methods that are useful for POSCAR files
-        # so we allow loading them eventhough most methods will ot work
-        if not is_poscar:
-            self.__compute_axes()
+            self.velocity = None
+            self.vacf = None
+            self.dos = None
+            self.__compute_axes()            
 
     def prime_check(self):
         print('... Running primality check ...')
@@ -640,6 +644,9 @@ def get_octahedral_tilts(md, octahedra, t=0, verbose=False, symmetry=None, summa
         if verbose:
             print("Cu {} | Q1eq: {:+.2f}, {:+.2f} | Q2eq: {:+.2f}, {:+.2f}".format(cu, Q1_eq1, Q1_eq2, Q2_eq1, Q2_eq2))
             print("Cu {} | Q1ap: {:+.2f}, {:+.2f} | Q2ap: {:+.2f}, {:+.2f}".format(cu, Q1_above, Q1_below, Q2_above, Q2_below))
+
+    if symmetry is not None:
+        Q_list = Q_list*symmetry
             
     # use to determine symmetry
     if summary:
@@ -647,11 +654,9 @@ def get_octahedral_tilts(md, octahedra, t=0, verbose=False, symmetry=None, summa
         print("(4:8)   Average Q1: {:+.5f} | Average Q2: {:+.5f}".format(Q_list[4:8,0:4].mean(), Q_list[4:8,4:8].mean()))
         print("(8:12)  Average Q1: {:+.5f} | Average Q2: {:+.5f}".format(Q_list[8:12,0:4].mean(), Q_list[8:12,4:8].mean()))
         print("(12:16) Average Q1: {:+.5f} | Average Q2: {:+.5f}".format(Q_list[12:16,0:4].mean(), Q_list[12:16,4:8].mean()))
+        print("Total   Average Q1: {:+.5f} | Average Q2: {:+.5f}".format(Q_list[:,0:4].mean(), Q_list[:,4:8].mean()))
 
-    if symmetry is None:
-        return Q_list
-    else:
-        return Q_list*symmetry
+    return Q_list
 
 def get_octahedral_tilt_histogram(md, octahedra, sym=None):
     Q1 = []
