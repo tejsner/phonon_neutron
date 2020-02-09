@@ -9,10 +9,10 @@ Tools to compare neutron scattering data with phonon calculations (MD or Frozen 
 
 ## Usage
 
-During my thesis, a selection of Python classes were developed with the intention of generalizing some of the tasks required to get the correct neutron weights out of simulations. While software such as [MDANSE](https://mdanse.org/) does a good job with respect to molecular dynamics, I wanted something focussed on analyzing phonons specifically from different levels of theory (MD and "Frozen Phonons"). Two modules is found here:
+During my thesis, a selection of Python classes were developed with the intention of generalizing some of the tasks required to get the correct neutron weights out of simulations. While software such as [MDANSE](https://mdanse.org/) does a good job with respect to molecular dynamics, I wanted something focussed on analyzing phonons specifically from different levels of theory (MD and "Frozen Phonons"). Two modules are found here:
 
 ### md_tools.py
-This module is used to perform various task on molecular dynamics trajectories as obtained from VASP. VASP trajectories are saved in `XDATCAR` files, which can be analysed, for example, in the following way:
+This module is used to perform various tasks on molecular dynamics trajectories as obtained from VASP. VASP trajectories are saved in `XDATCAR` files, which can be analysed, for example, in the following way:
 
 ```
 from md_tools import VaspMD
@@ -23,7 +23,7 @@ md_data.compute_pdf()
 md_data.compute_dos(sigma=0.5)
 ```
 
-Line 1 simply imports the module, line 2 reads the VASP trajectory (specifiying the time step `dt`) and lines 3-6 computes velocity, temperature, the pair distribution function and the phonon density of states with a Gaussian smearing width of sigma = 0.5 meV. Everything is now saved in the `md_data` object, and can be plotted, for example, using matplotlib in the following way:
+Line 1 imports the module, line 2 reads the VASP trajectory (specifiying the time step `dt`) and lines 3-6 computes velocity, temperature, the pair distribution function and the phonon density of states with a Gaussian smearing width of sigma = 0.5 meV. Everything is now saved in the `md_data` object, and can be plotted, for example, using matplotlib in the following way:
 
 ```
 import matplotlib.pytplot as plt
@@ -69,7 +69,7 @@ import matplotlib.pyplot as plt
 ph_data = PhonopyNeutron('phonopy_disp.yaml', 'FORCE_SETS')
 cmap_data = lco.get_sqw_xy ([1, 5, -1, 3], 100, 100)
 x, y, I = get_xy_colormap(cmap_data, 9, sigma=1)
-plt. pcolor (x, y, I)
+plt.pcolor (x, y, I)
 ```
 
 We load the modules in line 1, and the Phonopy data in line 3. In line 4, we generate the S(Q, omega) in a grid where Qx ranges from 1 to 5 and Qy ranges from -1 to 3 with a grid size of 100 in each direction. The evaluation of this can be quite slow, so start with a small grid size. Finally, the `get_xy_colormap()` function uses this data to generate a colormap at a certain energy (here 9 meV) with some fixed Gaussian resolution `sigma` (in meV).
