@@ -54,10 +54,10 @@ import matplotlib.pyplot as plt
 f, ax = plt.subplots()
 ph_data = PhonopyNeutron('phonopy_disp.yaml', 'FORCE_SETS ')
 ph_data.set_path([[0,0,0] ,[0.5,0.5,0] ,[1,0,0] ,[0,0,0]])
-ph_data.set_labels (['$\Gamma$ ', 'X', 'M', '$\Gamma$'])
+ph_data.set_labels(['$\Gamma$ ', 'X', 'M', '$\Gamma$'])
 ph_data.compute_bands()
 ph_data.compute_neutron_bands()
-ph_data.plot_neutron_bands (ax , plotype='lines', sigma=0.2)
+ph_data.plot_neutron_bands(ax , plotype='lines', sigma=0.2)
 ```
 Line 1 imports the module, and line 4 imports the Phonopy data. In order to get the band structure, it is necessary to set the path in reciprocal space that you want to plot as shown in line 5. The coordinates are here with respect to the input cell, so not necessarily the primitive cell. Line 5 simply labels these paths, line 6 and 7 computes the bands and line 8 plots them.
 
@@ -67,7 +67,7 @@ A different option is to plot in 2 dimensions of Q at a selected energy. An exam
 from phonopy_tools import PhonopyNeutron, get_xy_colormap
 import matplotlib.pyplot as plt
 ph_data = PhonopyNeutron('phonopy_disp.yaml', 'FORCE_SETS')
-cmap_data = lco.get_sqw_xy ([1, 5, -1, 3], 100, 100)
+cmap_data = lco.get_sqw_xy([1, 5, -1, 3], 100, 100)
 x, y, I = get_xy_colormap(cmap_data, 9, sigma=1)
 plt.pcolor (x, y, I)
 ```
