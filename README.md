@@ -67,7 +67,7 @@ A different option is to plot in 2 dimensions of Q at a selected energy. An exam
 from phonopy_tools import PhonopyNeutron, get_xy_colormap
 import matplotlib.pyplot as plt
 ph_data = PhonopyNeutron('phonopy_disp.yaml', 'FORCE_SETS')
-cmap_data = lco.get_sqw_xy([1, 5, -1, 3], 100, 100)
+cmap_data = ph_data.get_sqw_xy([1, 5, -1, 3], 100, 100)
 x, y, I = get_xy_colormap(cmap_data, 9, sigma=1)
 plt.pcolor (x, y, I)
 ```
